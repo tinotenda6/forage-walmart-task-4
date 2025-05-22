@@ -1,53 +1,77 @@
 import csv
 import sqlite3
-from collections import defaultdict
-#function to read from csv file
-def insertSheet1(file):
-    product = []
-    origin = []
-    dest = []
-    quantity = []
 
-    with open(file, newline='') as csvfile:
-        spamreader = csv.DictReader(csvfile)
-        for row in spamreader:
-            #extract 
-            product.append(row["product"])
-            origin.append(row["origin_warehouse"])
-            dest.append(row["destination_store"])
-            quantity.append(row["product_quantity"])
-    #populate product table
-    setProduct = set(product)
+class PopulateDatabase:
+    def __init__(self):
+        self.products = []
+        self.origins = []
+        self.destinations = []
+        self.quantitys = []
 
-    con = sqlite3.connect("forage-walmart-task-4/shipment_database.db")
+    def extractContained(self, file):
 
-    cursor = con.cursor()
-    for prod in setProduct:
-        cursor.execute("INSERT INTO product (name) VALUES (?)", (prod,))
-    
-    cursor.execute("SELECT * FROM product")
-    prodRows = cursor.fetchall()#create a map of product, product_id
-    prodIdMap = {name: id for id, name in prodRows}
-  
-    #insert into shipment
-    #iterate i to size of product 
-    for i in range(len(origin)):
-        prodId = prodIdMap[product[i]]
-        org = origin[i]
-        des = dest[i]
-        quant = quantity[i]
-        cursor.execute("INSERT INTO shipment (product_id,quantity,origin,destination) VALUES (?,?,?,?)", (prodId,quant,org, des,))
+        with open(file, newline='') as csvfile:
+            spamreader = csv.DictReader(csvfile)
+            for row in spamreader:
+                #extract 
+                self.products.append(row["product"])
+                self.origins.append(row["origin_warehouse"])
+                self.destinations.append(row["destination_store"])
+                self.quantitys.append(row["product_quantity"])
 
-    cursor.execute("SELECT * FROM shipment")
-    print(cursor.fetchall())
-    # Commit changes and close
-    con.commit()
-    con.close()
 
+    def extractNonContained(self,file1, file2):
+        identifier = []
+        prods = []
+        with open(file1, newline='') as csvfile:
+            spamreader = csv.DictReader(csvfile)
+            for row in spamreader:
+                #extract 
+                prods.append(row["product"])
+                identifier.append(row["shipment_identifier"])
         
-# con = sqlite3.connect("forage-walmart-task-4/shipment_database.db")
-# cursor = con.cursor()
-# cursor.execute("SELECT name, sql FROM sqlite_master WHERE type='table';")
-# print(cursor.fetchall())
-# insertSheet1('forage-walmart-task-4/data/shipping_data_0.csv')
+        with open(file2, newline='') as csvfile:
+            spamreader = csv.DictReader(csvfile)
+            for row in spamreader:
+                id = row["shipment_identifier"]
+                indexIdFile1 = identifier.index(id)
+                if indexIdFile1 != -1:
+                    self.products.append(prods[indexIdFile1])
+                    self.origins.append(row["origin_warehouse"])
+                    self.destinations.append(row["destination_store"])
+                    self.quantitys.append(identifier.count(id))
     
+    def insertDb(self):
+            #populate product table
+        setProduct = set(self.products)
+
+        con = sqlite3.connect("forage-walmart-task-4/shipment_database.db")
+
+        cursor = con.cursor()
+        for prod in setProduct:
+            cursor.execute("INSERT INTO product (name) VALUES (?)", (prod,))
+        
+        cursor.execute("SELECT * FROM product")
+        prodRows = cursor.fetchall()#create a map of product, product_id
+        prodIdMap = {name: id for id, name in prodRows}
+    
+        # insert into shipment
+        # iterate i to size of product 
+        for i in range(len(self.origins)):
+            prodId = prodIdMap[self.products[i]]
+            org = self.origins[i]
+            des = self.destinations[i]
+            quant = self.quantitys[i]
+            cursor.execute("INSERT INTO shipment (product_id,quantity,origin,destination) VALUES (?,?,?,?)", (prodId,quant,org, des,))
+
+        cursor.execute("SELECT * FROM shipment")
+        print(cursor.fetchall())
+        # Commit changes and close
+        con.commit()
+        con.close()
+
+pD = PopulateDatabase()
+pD.extractContained('forage-walmart-task-4/data/shipping_data_0.csv')
+pD.extractNonContained('forage-walmart-task-4/data/shipping_data_1.csv','forage-walmart-task-4/data/shipping_data_2.csv')
+pD.insertDb()
+
